@@ -1,0 +1,142 @@
+version: "3.8"
+
+services:
+  # RAG Service - Python FastAPI for semantic search
+  rag_service:
+    build:
+      context: ./packages/rag_service
+      dockerfile: Dockerfile
+    container_name: shankh-rag-service
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./packages/rag_service:/app
+      - ./data/pdfs:/app/data/pdfs
+      - ./data/faiss_index:/app/data/faiss_index
+      - rag_cache:/root/.cache # Cache for model downloads
+    environment:
+      - PDF_DIRECTORY=/app/data/pdfs
+      - FAISS_INDEX_PATH=/app/data/faiss_index/faiss_index.bin
+      - METADATA_PATH=/app/data/faiss_index/metadata.pkl
+      - EMBEDDING_MODEL=paraphrase-multilingual-mpnet-base-v2
+      - CHUNK_SIZE=700
+      - OVERLAP=100
+      - TOP_K_DEFAULT=5
+      - ENABLE_WHISPER_TRANSCRIPTION=false
+    networks:
+      - shankh-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  # Backend - Node.js Express with LLM/STT/TTS
+  backend:
+    build:
+      context: ./packages/backend
+      dockerfile: Dockerfile
+    container_name: shankh-backend
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./packages/backend:/app
+      - ./data/audio:/app/audio
+      - ./data/uploads:/app/uploads
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - RAG_SERVICE_URL=http://rag_service:8000
+
+      # LLM Provider (set your keys in .env)
+      - LLM_PROVIDER=${LLM_PROVIDER:-claude}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+
+      # STT Provider
+      - STT_PROVIDER=${STT_PROVIDER:-whisper}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS}
+      - AZURE_SPEECH_KEY=${AZURE_SPEECH_KEY}
+      - AZURE_SPEECH_REGION=${AZURE_SPEECH_REGION}
+
+      # TTS Provider
+      - TTS_PROVIDER=${TTS_PROVIDER:-gtts}
+      - AZURE_TTS_KEY=${AZURE_TTS_KEY}
+      - AZURE_TTS_REGION=${AZURE_TTS_REGION}
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
+
+      # Session & Features
+      - SESSION_TIMEOUT=3600000
+      - ENABLE_REDIS=false
+      - REDIS_URL=${REDIS_URL}
+      - MAX_AUDIO_SIZE_MB=10
+      - AUDIO_CLEANUP_INTERVAL=3600000
+
+      # CORS
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:5173}
+    depends_on:
+      - rag_service
+    networks:
+      - shankh-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+  # Frontend - React + Vite
+  frontend:
+    build:
+      context: ./packages/frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=${VITE_API_URL:-http://localhost:4000}
+        - VITE_WS_URL=${VITE_WS_URL:-ws://localhost:4000}
+    container_name: shankh-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    networks:
+      - shankh-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Optional: Redis for session storage (uncomment if needed)
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: shankh-redis
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis_data:/data
+  #   networks:
+  #     - shankh-network
+  #   command: redis-server --appendonly yes
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #   restart: unless-stopped
+
+networks:
+  shankh-network:
+    driver: bridge
+
+volumes:
+  rag_cache:
+    driver: local
+  # redis_data:
+  #   driver: local
