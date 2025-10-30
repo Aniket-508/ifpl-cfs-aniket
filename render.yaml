@@ -1,9 +1,26 @@
 services:
-  # Backend Service (Node.js)
+  # RAG Service (Python) - Deploy FIRST
+  - type: web
+    name: shankh-rag
+    runtime: python
+    plan: free
+    buildCommand: cd packages/rag_service && pip install -r requirements.txt && python ingest.py --data-dir ../../data
+    startCommand: cd packages/rag_service && uvicorn server:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: EMBEDDING_MODEL
+        value: paraphrase-multilingual-mpnet-base-v2
+      - key: INDEX_PATH
+        value: ./index
+      - key: CHUNK_SIZE
+        value: 700
+      - key: CHUNK_OVERLAP
+        value: 100
+
+  # Backend Service (Node.js) - Deploy SECOND
   - type: web
     name: shankh-backend
     runtime: node
-    region: oregon
     plan: free
     buildCommand: cd packages/backend && npm install
     startCommand: cd packages/backend && node server.js
@@ -12,7 +29,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: PORT
-        value: 4000
+        value: 10000
       - key: LLM_PROVIDER
         value: claude
       - key: LLM_FALLBACK
@@ -26,57 +43,23 @@ services:
       - key: SESSION_STORE
         value: memory
       - key: RAG_SERVICE_URL
-        fromService:
-          type: web
-          name: shankh-rag
-          property: url
+        value: https://shankh-rag.onrender.com
       - key: CLAUDE_API_KEY
-        sync: false # Set manually in Render dashboard
+        sync: false
       - key: OPENROUTER_API_KEY
         sync: false
       - key: GEMINI_API_KEY
         sync: false
-    disk:
-      name: backend-data
-      mountPath: /app/uploads
-      sizeGB: 1
 
-  # RAG Service (Python)
-  - type: web
-    name: shankh-rag
-    runtime: python
-    region: oregon
-    plan: free
-    buildCommand: cd packages/rag_service && pip install -r requirements.txt && python ingest.py --data-dir ../../data
-    startCommand: cd packages/rag_service && uvicorn server:app --host 0.0.0.0 --port $PORT
-    healthCheckPath: /health
-    envVars:
-      - key: EMBEDDING_MODEL
-        value: paraphrase-multilingual-mpnet-base-v2
-      - key: INDEX_PATH
-        value: /app/index
-      - key: CHUNK_SIZE
-        value: 700
-      - key: CHUNK_OVERLAP
-        value: 100
-    disk:
-      name: rag-faiss-index
-      mountPath: /app/index
-      sizeGB: 1
-
-  # Frontend (Static Site)
+  # Frontend (Static Site) - Deploy LAST
   - type: web
     name: shankh-frontend
     runtime: static
-    region: oregon
     buildCommand: cd packages/frontend && npm install && npm run build
     staticPublishPath: packages/frontend/dist
     envVars:
       - key: VITE_API_URL
-        fromService:
-          type: web
-          name: shankh-backend
-          property: url
+        value: https://shankh-backend.onrender.com
     routes:
       - type: rewrite
         source: /*
