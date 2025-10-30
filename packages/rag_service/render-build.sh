@@ -17,7 +17,7 @@ if [ -d "../../data/pdfs" ]; then
     
     if [ "$PDF_COUNT" -gt 0 ]; then
         echo "PDFs found, running ingestion..."
-        python ingest.py --data-dir ../../data
+        python ingest.py --data-dir ../../data/pdfs
     else
         echo "No PDFs found in data/pdfs directory"
     fi
