@@ -36,8 +36,6 @@ services:
         sync: false
       - key: GEMINI_API_KEY
         sync: false
-      - key: CORS_ORIGINS
-        sync: https://shankh-frontend.onrender.com,http://localhost:5173
     disk:
       name: backend-data
       mountPath: /app/uploads
