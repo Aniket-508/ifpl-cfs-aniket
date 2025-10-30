@@ -78,6 +78,8 @@ const config = {
   requireRagCitations: process.env.REQUIRE_RAG_CITATIONS !== "false",
 };
 
+console.log("🚀 ~ config:", config.corsOrigins)
+
 // Ensure temp directory exists
 if (!fs.existsSync(config.tempDir)) {
   fs.mkdirSync(config.tempDir, { recursive: true });
