@@ -6,7 +6,7 @@ python-multipart==0.0.6
 # ML & Embeddings
 sentence-transformers==2.3.1
 transformers==4.36.2
-torch==2.1.2
+torch>=2.0.0
 
 # Vector Database
 faiss-cpu==1.7.4
